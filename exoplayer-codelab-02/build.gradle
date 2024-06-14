@@ -9,4 +9,8 @@ dependencies {
     implementation "androidx.media3:media3-exoplayer:$mediaVersion"
     implementation "androidx.media3:media3-ui:$mediaVersion"
     implementation "androidx.media3:media3-exoplayer-dash:$mediaVersion"
+
+    implementation "com.squareup.okhttp3:okhttp:3.12.13"
+    implementation "com.squareup.okhttp3:okhttp-sse:3.12.13"
+    implementation "com.google.code.gson:gson:2.8.7"
 }

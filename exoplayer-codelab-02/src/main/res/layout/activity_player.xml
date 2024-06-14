@@ -16,8 +16,49 @@ limitations under the License. -->
     android:layout_height="match_parent"
     android:background="#000000">
 
-  <androidx.media3.ui.PlayerView android:id="@+id/video_view"
-      android:layout_width="match_parent"
-      android:layout_height="match_parent"/>
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/video_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_play_stream1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="play stream1"
+            android:textColor="@color/colorAccent"
+            android:textSize="38dp" />
+
+        <TextView
+            android:id="@+id/tv_play_stream2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="play stream2"
+            android:textColor="@color/colorAccent"
+            android:textSize="38dp" />
+
+        <TextView
+            android:id="@+id/tv_play_local"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="play local"
+            android:textColor="@color/colorAccent"
+            android:textSize="38dp" />
+
+
+        <TextView
+            android:id="@+id/tv_play_net"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="play url"
+            android:textColor="@color/colorAccent"
+            android:textSize="38dp" />
+    </LinearLayout>
 
 </FrameLayout>
