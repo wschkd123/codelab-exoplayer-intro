@@ -2,6 +2,8 @@ package com.example.exoplayer
 
 import android.app.Activity
 import android.util.Log
+import android.widget.Toast
+import com.example.exoplayer.util.HttpLogInterceptor
 import com.example.exoplayer.util.JsonUtilKt
 import com.example.exoplayer.util.YWFileUtil
 import okhttp3.MediaType
@@ -12,6 +14,8 @@ import okhttp3.Response
 import okhttp3.internal.sse.RealEventSource
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
+import okio.Buffer
+import java.io.EOFException
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -27,7 +31,7 @@ import java.util.concurrent.TimeUnit
  */
 class SpeechStreamHelper(
     private val activity: Activity,
-    val invoke: (MediaDataSource) -> Unit
+    private val listener: SpeechStreamListener? = null
 ) {
     private val TAG = "SpeechStreamHelper"
     private val apiKey =
@@ -35,6 +39,12 @@ class SpeechStreamHelper(
     private val format = "mp3"
     private val mediaType = MediaType.parse("application/json; charset=utf-8");
     private var chunkIndex = 0
+    private val okHttpClient: OkHttpClient =
+        OkHttpClient.Builder()
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(1, TimeUnit.MINUTES)
+            .addNetworkInterceptor(HttpLogInterceptor())
+            .build()
 
     fun loadData(content: String = "你好") {
         chunkIndex = 0
@@ -59,11 +69,6 @@ class SpeechStreamHelper(
                 "    \"bitrate\": 128000,\n" +
                 "    \"format\": \"$format\"\n" +
                 "  }"
-        val okHttpClient: OkHttpClient =
-            OkHttpClient.Builder()
-                .connectTimeout(1, TimeUnit.MINUTES)
-                .readTimeout(1, TimeUnit.MINUTES)
-                .build()
         val requestBody = RequestBody.create(mediaType, json)
         val request = Request.Builder()
             .url("https://api.minimax.chat/v1/tts/stream?GroupId=1782588509698134455")
@@ -76,7 +81,7 @@ class SpeechStreamHelper(
         val realEventSource = RealEventSource(request, object : EventSourceListener() {
             override fun onOpen(eventSource: EventSource, response: Response) {
                 super.onOpen(eventSource, response)
-                showMessage("已连接")
+                Log.i(TAG, "已连接")
             }
 
             override fun onEvent(
@@ -91,7 +96,7 @@ class SpeechStreamHelper(
 
             override fun onClosed(eventSource: EventSource) {
                 super.onClosed(eventSource)
-                showMessage("已断开")
+                Log.i(TAG, "已断开")
             }
 
             override fun onFailure(
@@ -100,44 +105,55 @@ class SpeechStreamHelper(
                 response: Response?
             ) {
                 super.onFailure(eventSource, t, response)
-                showMessage("连接失败 ${t?.message}")
+                Log.i(TAG, "连接失败 ${t?.message}")
+                val data = readFromBuffer(response)
+                processMessageContent(data)
             }
         })
         realEventSource.connect(okHttpClient)
 
     }
 
-    private fun showMessage(msg: String) {
-        activity.runOnUiThread {
-            Log.i(TAG, "msg:${msg}")
+    private fun readFromBuffer(response: Response?): String {
+        val buffer: Buffer = response?.body()?.source()?.buffer()?:return ""
+        val bufferSize = buffer.size()
+        var body = ""
+        try {
+            body = buffer.readString(bufferSize, okhttp3.internal.Util.UTF_8)
+        } catch (e: EOFException) {
+            body += "\\n\\n--- Unexpected end of content ---"
         }
+        return body
     }
 
-    private fun processMessageContent(msg: String) {
-        val chunk = JsonUtilKt.toObject(msg, ChunkData::class.java)
+    private fun processMessageContent(data: String) {
+        val chunk = JsonUtilKt.toObject(data, ChunkData::class.java)
         if (chunk == null) {
             Log.i(TAG, "chunk is null")
             return
         }
-        val trace_id = chunk.trace_id
+        val traceId = chunk.trace_id
         if (chunk.base_resp.isSuccess().not()) {
-            Log.i(TAG, "chunk is fail, msg ${chunk.base_resp.status_msg} trace_id:$trace_id")
+            Log.w(TAG, "chunk is fail, code:${chunk.base_resp.status_code} msg:${chunk.base_resp.status_msg} trace_id:$traceId")
+            activity.runOnUiThread {
+                Toast.makeText(activity, "操作太快", Toast.LENGTH_SHORT).show()
+            }
             return
         }
         if (chunk.data.audio.isNullOrEmpty()) {
-            Log.i(TAG, "audio is null, trace_id:$trace_id")
+            Log.i(TAG, "audio is null, trace_id:$traceId")
             return
         }
         activity.runOnUiThread {
             val chunkPath = if (chunk.data.isEnd()) {
                 //TODO 缓存
-                Log.i(TAG, "sse end, trace_id:$trace_id")
+                Log.i(TAG, "sse end, trace_id:$traceId")
                 saveAudioLocal(chunk.data.audio, chunk.trace_id)
             } else {
-                Log.i(TAG, "content:${chunk.data.audio.length}, trace_id:$trace_id")
+                Log.i(TAG, "content:${chunk.data.audio.length}, trace_id:$traceId")
                 saveAudioLocal(chunk.data.audio, chunk.trace_id + "_" + chunkIndex++)
             }
-            invoke.invoke(MediaDataSource(chunk.trace_id, chunkPath, format, chunk.data.isEnd()))
+            listener?.onReceiveChunk(MediaDataSource(chunk.trace_id, chunkPath, format, chunk.data.isEnd()))
         }
     }
 
@@ -170,6 +186,10 @@ class SpeechStreamHelper(
             Log.e(TAG, "Error saving file: ${e.message}")
         }
     }
+}
+
+interface SpeechStreamListener {
+    fun onReceiveChunk(dataSource: MediaDataSource)
 }
 
 /**

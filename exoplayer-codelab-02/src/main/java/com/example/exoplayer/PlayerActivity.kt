@@ -39,30 +39,33 @@ class PlayerActivity : AppCompatActivity() {
     private var playWhenReady = true
     private var mediaItemIndex = 0
     private var playbackPosition = 0L
-    private var index = 0
-    private val chatSpeechHelper = SpeechStreamHelper(this) { dataSource ->
-        if (dataSource.isEnd.not()) {
-            player?.addMediaItem(MediaItem.fromUri(dataSource.chunkPath))
-            player?.prepare()
-            player?.playWhenReady = playWhenReady
-        }
-    }
     private val mp3Url = "https://www.cambridgeenglish.org/images/153149-movers-sample-listening-test-vol2.mp3"
-    private val mp3Path by lazy { YWFileUtil.getStorageFileDir(this).path + "/Audio/" + "test.mp3" }
+    private val mp3Path by lazy { YWFileUtil.getStorageFileDir(this).path + "/test.mp3" }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         binding.tvPlayStream1.setOnClickListener {
-            index = 0
             player?.clearMediaItems()
-            chatSpeechHelper.loadData("全称是Server-Send")
+            //TODO 解决切换后监听的问题
+            val chatSpeechHelper = SpeechStreamHelper(this, object : SpeechStreamListener {
+                override fun onReceiveChunk(dataSource: MediaDataSource) {
+                    replaceDataSource(dataSource)
+                }
+
+            })
+            chatSpeechHelper.loadData("Server-Send Events")
         }
 
         binding.tvPlayStream2.setOnClickListener {
-            index = 0
             player?.clearMediaItems()
-            chatSpeechHelper.loadData("你好筑梦岛")
+            val chatSpeechHelper = SpeechStreamHelper(this, object : SpeechStreamListener {
+                override fun onReceiveChunk(dataSource: MediaDataSource) {
+                  replaceDataSource(dataSource)
+                }
+
+            })
+            chatSpeechHelper.loadData("你好筑梦岛1")
         }
 
         binding.tvPlayLocal.setOnClickListener {
@@ -85,6 +88,15 @@ class PlayerActivity : AppCompatActivity() {
 
     }
 
+    private fun replaceDataSource(dataSource: MediaDataSource) {
+        if (dataSource.isEnd.not()) {
+            Log.w(TAG, "receive stream path:${dataSource.chunkPath}")
+            player?.addMediaItem(MediaItem.fromUri(dataSource.chunkPath))
+            player?.prepare()
+            player?.playWhenReady = playWhenReady
+        }
+    }
+
 
     override fun onStart() {
         super.onStart()
@@ -97,18 +109,13 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun initializePlayer() {
-        // ExoPlayer implements the Player interface
         player = ExoPlayer.Builder(this)
             .build()
             .also { exoPlayer ->
-                binding.videoView.player = exoPlayer
+//                binding.videoView.player = exoPlayer
 
-                val mediaItem = MediaItem.fromUri(getString(R.string.media_url_mp4))
-                val secondMediaItem = MediaItem.fromUri(getString(R.string.media_url_mp3))
-//                exoPlayer.addMediaItem(mediaItem)
                 exoPlayer.playWhenReady = playWhenReady
                 exoPlayer.addListener(playbackStateListener)
-//                exoPlayer.prepare()
             }
     }
 
